@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agile Aggregator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f5f7fa;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    header {
+      background-color: #1f2937;
+      padding: 1rem 2rem;
+      color: white;
+      text-align: center;
+    }
+    main {
+      max-width: 1000px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    }
+    label {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      display: block;
+    }
+    form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    input, select, button {
+      padding: 0.5rem;
+      font-size: 1rem;
+      width: 100%;
+    }
+    .group {
+      margin-bottom: 2rem;
+    }
+    .group h2 {
+      margin-bottom: 0.5rem;
+      color: #1f2937;
+      font-size: 1.25rem;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 0.25rem;
+    }
+    .results {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .card img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+    }
+    .card h3 {
+      margin: 0.5rem 0;
+      font-size: 1.1rem;
+    }
+    .card p {
+      font-size: 0.9rem;
+      flex-grow: 1;
+    }
+    .card a {
+      margin-top: 0.5rem;
+      text-decoration: none;
+      color: #3b82f6;
+      font-weight: bold;
+    }
+    .pagination {
+      text-align: center;
+      margin-top: 1rem;
+    }
+    .pagination button {
+      margin: 0 0.25rem;
+      padding: 0.5rem 1rem;
+      background-color: #e5e7eb;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agile Aggregator</h1>
+    <p>Search news, music, and weather. All in one place.</p>
+  </header>
+  <main>
+    <form id="searchForm">
+  <div>
+    <label for="keyword">Search for</label>
+    <input type="text" name="keyword" id="keyword" placeholder="Enter keyword..." required />
+  </div>
+  <div>
+    <label for="services">In</label>
+    <select name="services" id="services">
+      <option value="news,spotify,weather">All Services</option>
+      <option value="news">News Only</option>
+      <option value="spotify">Spotify Only</option>
+      <option value="weather">Weather Only</option>
+    </select>
+  </div>
+  <div>
+    <label for="count">Results per Page</label>
+    <input type="number" name="count" id="count" value="5" min="1" />
+  </div>
+  <div id="sortGroup">
+    <label for="sortBy">Sort News By</label>
+    <select name="sortBy" id="sortBy">
+      <option value="publishedAt">Published At</option>
+      <option value="relevancy">Relevancy</option>
+      <option value="popularity">Popularity</option>
+    </select>
+  </div>
+  <div id="dateGroup">
+    <label for="fromDate">Show News from</label>
+    <input type="date" name="fromDate" id="fromDate" />
+  </div>
+  <div style="align-self: end;">
+    <button type="submit">Search</button>
+  </div>
+</form>
+
+
+    <div id="results"></div>
+  </main>
+
+ <script>
+  const form = document.getElementById('searchForm');
+  const resultsContainer = document.getElementById('results');
+
+  let servicePages = {};
+  let baseQuery = null;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    servicePages = {};
+    baseQuery = new URLSearchParams(new FormData(form));
+    await fetchResults();
+  });
+
+  async function fetchResults(serviceToUpdate = null) {
+    const count = parseInt(document.getElementById('count').value, 10) || 5;
+    const services = baseQuery.get('services')?.split(',') || [];
+
+    // ? Only clear the results container once (not per service)
+    if (!serviceToUpdate) {
+      resultsContainer.innerHTML = '';
+    }
+
+    for (const service of services) {
+      if (!servicePages[service]) servicePages[service] = 1;
+      if (serviceToUpdate && service !== serviceToUpdate) continue;
+
+      const query = new URLSearchParams(baseQuery.toString());
+      query.set('page', servicePages[service]);
+      query.set('count', count);
+      query.set('services', service);
+
+      const res = await fetch(`/api/aggregation?${query}`);
+      const data = await res.json();
+
+      let existingGroup = resultsContainer.querySelector(`.group[data-service='${service}']`);
+
+      if (existingGroup) {
+        existingGroup.innerHTML = '';
+      } else {
+        existingGroup = document.createElement('div');
+        existingGroup.className = 'group';
+        existingGroup.dataset.service = service;
+        resultsContainer.appendChild(existingGroup);
+      }
+
+      const header = document.createElement('h2');
+      header.textContent = service.charAt(0).toUpperCase() + service.slice(1);
+      existingGroup.appendChild(header);
+
+      const results = data[service]?.results || [];
+      const totalCount = data[service]?.totalCount || 0;
+      const totalPages = Math.ceil(totalCount / count);
+
+      const groupResults = document.createElement('div');
+      groupResults.className = 'results';
+
+      results.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        if (item.imageUrl) {
+          const img = document.createElement('img');
+          img.src = item.imageUrl;
+          card.appendChild(img);
+        }
+
+        const title = document.createElement('h3');
+        title.textContent = item.title;
+        card.appendChild(title);
+
+        const desc = document.createElement('p');
+        desc.textContent = item.description;
+        card.appendChild(desc);
+
+        const link = document.createElement('a');
+        link.href = item.url;
+        link.textContent = 'Read more';
+        link.target = '_blank';
+        card.appendChild(link);
+
+        groupResults.appendChild(card);
+      });
+
+      existingGroup.appendChild(groupResults);
+
+      if (totalPages > 1) {
+        const nav = document.createElement('div');
+        nav.className = 'pagination';
+
+        if (servicePages[service] > 1) {
+          const prev = document.createElement('button');
+          prev.textContent = 'Previous';
+          prev.onclick = () => {
+            servicePages[service]--;
+            fetchResults(service);
+          };
+          nav.appendChild(prev);
+        }
+
+        const pageDisplay = document.createElement('span');
+        pageDisplay.textContent = ` Page ${servicePages[service]} of ${totalPages} `;
+        pageDisplay.style.margin = '0 1rem';
+        nav.appendChild(pageDisplay);
+
+        if (servicePages[service] < totalPages) {
+          const next = document.createElement('button');
+          next.textContent = 'Next';
+          next.onclick = () => {
+            servicePages[service]++;
+            fetchResults(service);
+          };
+          nav.appendChild(next);
+        }
+
+        existingGroup.appendChild(nav);
+      }
+    }
+  }
+
+   const servicesSelect = document.getElementById('services');
+  const sortGroup = document.getElementById('sortGroup');
+  const dateGroup = document.getElementById('dateGroup');
+  const fromDateInput = document.getElementById('fromDate');
+
+  function updateNewsFieldsVisibility() {
+    const selected = servicesSelect.value.split(',');
+    const show = selected.includes('news');
+    sortGroup.style.display = show ? '' : 'none';
+    dateGroup.style.display = show ? '' : 'none';
+  }
+
+  servicesSelect.addEventListener('change', updateNewsFieldsVisibility);
+
+ window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('keyword').value = 'Athens'; // Pre-fill keyword
+  const today = new Date().toISOString().split('T')[0];
+  fromDateInput.value = today;
+
+  updateNewsFieldsVisibility();
+  baseQuery = new URLSearchParams(new FormData(form));
+  fetchResults();
+});
+
+
+</script>
+
+
+</body>
+</html>
