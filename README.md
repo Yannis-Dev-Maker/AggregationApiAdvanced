@@ -17,7 +17,7 @@ This is the **advanced version** of the AgileAggregator project. It dynamically 
 
 ## 🧠 Architecture
 
-![Architecture Diagram](documentation/AgileAggregator_Advanced_Diagram.png)
+![Architecture Diagram](/documentation/AgileAggregator_Advanced_Diagram.png)
 
 ---
 
